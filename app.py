@@ -19,6 +19,25 @@ from fastapi.middleware.cors import CORSMiddleware
 # Initialize FastAPI app
 app = FastAPI(title="Image Enhancement and Detection API")
 
+# Global variable for model
+yolo_model = None
+
+@app.on_event("startup")
+async def load_model():
+    global yolo_model
+    import torch
+    # Force CPU usage and optimize memory
+    torch.set_num_threads(1)
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
+    print("🔄 Loading YOLOv8 model...")
+    yolo_model = YOLO("yolov8n.pt")
+    # Force model to CPU and half precision
+    yolo_model.to('cpu')
+    yolo_model.model.half()  # Use half precision
+    print("✅ YOLO model loaded successfully!\n")
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -27,11 +46,6 @@ app.add_middleware(
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
 )
-
-# Load YOLO model
-print("🔄 Loading YOLOv8 model...")
-yolo_model = YOLO("yolov8x.pt")
-print("✅ YOLO model loaded successfully!\n")
 
 # Load ResNet model for species classification
 print("🔄 Loading ResNet model for species classification...")
@@ -199,4 +213,5 @@ async def get_image(image_path: str):
 # Run the FastAPI app
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
