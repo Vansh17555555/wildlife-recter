@@ -49,8 +49,10 @@ app.add_middleware(
 
 # Load ResNet model for species classification
 print("🔄 Loading ResNet model for species classification...")
-classifier = models.resnet50(pretrained=True)
+classifier = models.resnet18(weights='IMAGENET1K_V1')  # Using smaller ResNet18 instead of ResNet50
 classifier.eval()
+classifier.to('cpu')
+classifier.half()  # Use half precision
 print("✅ ResNet model loaded successfully!\n")
 
 # Define ImageNet class labels (simplified for species mapping)
@@ -81,14 +83,13 @@ cloudinary.config(
 
 # Function to classify species
 def classify_species(image_crop):
-    image_pil = Image.fromarray(cv2.cvtColor(image_crop, cv2.COLOR_BGR2RGB))  # Convert OpenCV image to PIL
-    input_tensor = transform(image_pil).unsqueeze(0)  # Preprocess
-
-    with torch.no_grad():
-        output = classifier(input_tensor)  # Get predictions
-
-    predicted_species = output.argmax().item()  # Get highest scoring class index
-    confidence = torch.nn.functional.softmax(output, dim=1)[0][predicted_species].item()  # Confidence score
+    with torch.no_grad():  # Reduce memory usage during inference
+        image_pil = Image.fromarray(cv2.cvtColor(image_crop, cv2.COLOR_BGR2RGB))
+        input_tensor = transform(image_pil).unsqueeze(0).to('cpu').half()  # Use half precision
+        output = classifier(input_tensor)
+        
+    predicted_species = output.argmax().item()
+    confidence = torch.nn.functional.softmax(output, dim=1)[0][predicted_species].item()
 
     species_name = imagenet_classes.get(predicted_species, "Unknown Species")
     return species_name, confidence
